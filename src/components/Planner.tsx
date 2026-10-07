@@ -5,7 +5,9 @@ import { useState } from "react";
 
 const TripMap = dynamic(() => import("./TripMap"), {
   ssr: false,
-  loading: () => <p className="p-4 text-sm text-gray-500">지도 불러오는 중...</p>,
+  loading: () => (
+    <p className="p-4 text-sm text-gray-500">지도 불러오는 중...</p>
+  ),
 });
 
 type Place = { name: string; description: string; lat: number; lng: number };
