@@ -50,11 +50,17 @@ export default function TripMap({ places }: { places: MapPlace[] }) {
       />
       <FitBounds places={places} />
       {places.map((p, i) => (
-        <Marker key={`${p.name}-${i}`} position={[p.lat, p.lng]} icon={numberIcon(i + 1)}>
+        <Marker
+          key={`${p.name}-${i}`}
+          position={[p.lat, p.lng]}
+          icon={numberIcon(i + 1)}
+        >
           <Popup>{p.name}</Popup>
         </Marker>
       ))}
-      {line.length > 1 && <Polyline positions={line} pathOptions={{ color: "#2563eb", weight: 3 }} />}
+      {line.length > 1 && (
+        <Polyline positions={line} pathOptions={{ color: "#2563eb", weight: 3 }} />
+      )}
     </MapContainer>
   );
 }
