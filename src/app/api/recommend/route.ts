@@ -1,6 +1,6 @@
 export const maxDuration = 30;
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
 export async function POST(req: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
