@@ -11,6 +11,9 @@ const CONFIGURED_MODELS = (process.env.GEMINI_MODEL || "")
   .map((model) => model.trim().replace(/^models\//, ""))
   .filter(Boolean);
 
+// Gemini's error response explicitly recommends this model for this API key.
+const PROVIDER_RECOMMENDED_MODEL = "gemini-3.8-flash";
+const RETIRED_MODEL_PATTERN = /^gemini-2\.5-flash(?:-|$)/i;
 const TIMEOUT_MS = 15000;
 
 const schema = {
@@ -134,22 +137,26 @@ export async function POST(req: Request) {
     );
   }
 
-  const availableIds = new Set(availableModels.map((model) => model.modelId));
-  const configured = CONFIGURED_MODELS.filter((model) =>
-    availableIds.has(model)
-  );
   const discovered = availableModels
     .filter(
       ({ modelId, displayName }) =>
-        !/(preview|experimental)/i.test(`${modelId} ${displayName}`)
+        !/(preview|experimental)/i.test(`${modelId} ${displayName}`) &&
+        !RETIRED_MODEL_PATTERN.test(modelId)
     )
     .sort((a, b) => {
-      const aIsFlash = /flash/i.test(`${a.modelId} ${a.displayName}`);
-      const bIsFlash = /flash/i.test(`${b.modelId} ${b.displayName}`);
-      return Number(bIsFlash) - Number(aIsFlash);
+      const rank = (modelId: string, displayName: string) => {
+        if (modelId === PROVIDER_RECOMMENDED_MODEL) return 0;
+        const configuredIndex = CONFIGURED_MODELS.indexOf(modelId);
+        if (configuredIndex !== -1) return configuredIndex + 1;
+        if (/flash/i.test(`${modelId} ${displayName}`)) return 100;
+        return 200;
+      };
+      return (
+        rank(a.modelId, a.displayName) - rank(b.modelId, b.displayName)
+      );
     })
     .map(({ modelId }) => modelId);
-  const models = [...new Set([...configured, ...discovered])].slice(0, 3);
+  const models = discovered.slice(0, 3);
 
   if (models.length === 0) {
     return Response.json(
