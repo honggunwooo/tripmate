@@ -11,7 +11,7 @@ const CONFIGURED_MODELS = (process.env.GEMINI_MODEL || "")
   .map((model) => model.trim().replace(/^models\//, ""))
   .filter(Boolean);
 
-const TIMEOUT_MS = 25000;
+const TIMEOUT_MS = 15000;
 
 const schema = {
   type: "OBJECT",
@@ -138,31 +138,38 @@ export async function POST(req: Request) {
   const configured = CONFIGURED_MODELS.filter((model) =>
     availableIds.has(model)
   );
-  const discoveredFlash = availableModels
+  const discovered = availableModels
     .filter(
       ({ modelId, displayName }) =>
-        /flash/i.test(`${modelId} ${displayName}`) &&
         !/(preview|experimental)/i.test(`${modelId} ${displayName}`)
     )
+    .sort((a, b) => {
+      const aIsFlash = /flash/i.test(`${a.modelId} ${a.displayName}`);
+      const bIsFlash = /flash/i.test(`${b.modelId} ${b.displayName}`);
+      return Number(bIsFlash) - Number(aIsFlash);
+    })
     .map(({ modelId }) => modelId);
-  const models = [...new Set([...configured, ...discoveredFlash])].slice(0, 2);
+  const models = [...new Set([...configured, ...discovered])].slice(0, 3);
 
   if (models.length === 0) {
     return Response.json(
       {
         error:
-          "이 API 키에서 generateContent를 지원하는 Flash 모델을 찾지 못했어요. /api/models에서 사용 가능한 모델을 확인해 주세요.",
+          "이 API 키에서 generateContent를 지원하는 안정 모델을 찾지 못했어요. /api/models에서 사용 가능한 모델을 확인해 주세요.",
       },
       { status: 503 }
     );
   }
 
-  let lastMessage = "일정을 생성하지 못했어요.";
+  const failures: string[] = [];
   for (const model of models) {
     const result = await callGemini(model, apiKey, prompt);
     if (result.ok) return Response.json(result.json);
-    lastMessage = `[${model}] ${result.message}`;
+    failures.push(`[${model}] ${result.message}`);
   }
 
-  return Response.json({ error: lastMessage }, { status: 502 });
+  return Response.json(
+    { error: `사용 가능한 모델에서 일정을 생성하지 못했어요: ${failures.join(" | ")}` },
+    { status: 502 }
+  );
 }
