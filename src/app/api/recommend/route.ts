@@ -1,15 +1,17 @@
+import {
+  listAvailableGeminiModels,
+  type AvailableGeminiModel,
+} from "@/lib/gemini";
+
 export const maxDuration = 60;
 
-// 쉼표로 여러 개 지정 가능. 앞에서부터 순서대로 시도합니다.
-// AI Studio에서 확인한 현재 사용 가능한 모델명으로 바꿔도 됩니다.
-const MODELS = (
-  process.env.GEMINI_MODEL || "gemini-3.8-flash,gemini-3.8-flash-lite"
-)
+// 설정된 모델도 키로 조회한 실제 지원 목록에 있을 때만 우선 사용합니다.
+const CONFIGURED_MODELS = (process.env.GEMINI_MODEL || "")
   .split(",")
-  .map((m) => m.trim())
+  .map((model) => model.trim().replace(/^models\//, ""))
   .filter(Boolean);
 
-const TIMEOUT_MS = 20000;
+const TIMEOUT_MS = 25000;
 
 const schema = {
   type: "OBJECT",
@@ -117,8 +119,46 @@ export async function POST(req: Request) {
 - lat, lng는 해당 장소의 대략적인 위도/경도(소수점 4자리 이상).
 - description은 한국어로 한 문장.`;
 
+  let availableModels: AvailableGeminiModel[];
+  try {
+    availableModels = await listAvailableGeminiModels(apiKey);
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof Error
+            ? `Gemini 모델 목록을 확인하지 못했어요: ${error.message}`
+            : "Gemini 모델 목록을 확인하지 못했어요.",
+      },
+      { status: 502 }
+    );
+  }
+
+  const availableIds = new Set(availableModels.map((model) => model.modelId));
+  const configured = CONFIGURED_MODELS.filter((model) =>
+    availableIds.has(model)
+  );
+  const discoveredFlash = availableModels
+    .filter(
+      ({ modelId, displayName }) =>
+        /flash/i.test(`${modelId} ${displayName}`) &&
+        !/(preview|experimental)/i.test(`${modelId} ${displayName}`)
+    )
+    .map(({ modelId }) => modelId);
+  const models = [...new Set([...configured, ...discoveredFlash])].slice(0, 2);
+
+  if (models.length === 0) {
+    return Response.json(
+      {
+        error:
+          "이 API 키에서 generateContent를 지원하는 Flash 모델을 찾지 못했어요. /api/models에서 사용 가능한 모델을 확인해 주세요.",
+      },
+      { status: 503 }
+    );
+  }
+
   let lastMessage = "일정을 생성하지 못했어요.";
-  for (const model of MODELS) {
+  for (const model of models) {
     const result = await callGemini(model, apiKey, prompt);
     if (result.ok) return Response.json(result.json);
     lastMessage = `[${model}] ${result.message}`;
