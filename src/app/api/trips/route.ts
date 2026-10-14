@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -17,7 +17,7 @@ function getDatabase() {
   return neon(connectionString);
 }
 
-async function ensureTripsTable(sql: ReturnType<typeof neon>) {
+async function ensureTripsTable(sql: NeonQueryFunction<false, false>) {
   await sql`CREATE TABLE IF NOT EXISTS trips (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     title text NOT NULL,
