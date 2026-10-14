@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getSupabase } from "@/lib/supabase";
 
 const TripMap = dynamic(() => import("./TripMap"), {
   ssr: false,
@@ -11,6 +12,7 @@ const TripMap = dynamic(() => import("./TripMap"), {
 type Place = { name: string; description: string; lat: number; lng: number };
 type DayPlan = { day: number; places: Place[] };
 type Plan = { title: string; days: DayPlan[] };
+type SavedTrip = { id: string; title: string; city: string; days: number; taste: string; plan: Plan; created_at: string };
 
 export default function Planner() {
   const [city, setCity] = useState("");
@@ -20,6 +22,43 @@ export default function Planner() {
   const [activeDay, setActiveDay] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [savedTrips, setSavedTrips] = useState<SavedTrip[]>([]);
+  const [dbMessage, setDbMessage] = useState("");
+  const [dbBusy, setDbBusy] = useState(false);
+  const supabase = getSupabase();
+
+  async function refreshTrips() {
+    if (!supabase) { setDbMessage("Supabase 환경변수를 설정하면 저장한 일정을 볼 수 있어요."); return; }
+    const { data, error: queryError } = await supabase.from("trips").select("id,title,city,days,taste,plan,created_at").order("created_at", { ascending: false });
+    if (queryError) { setDbMessage(`일정 목록을 불러오지 못했어요: ${queryError.message}`); return; }
+    setSavedTrips((data ?? []) as SavedTrip[]);
+    setDbMessage("");
+  }
+
+  useEffect(() => { void refreshTrips(); }, []);
+
+  async function saveTrip() {
+    if (!plan || !supabase) return;
+    setDbBusy(true); setDbMessage("");
+    const { error: saveError } = await supabase.from("trips").insert({ title: plan.title, city, days, taste, plan });
+    if (saveError) setDbMessage(`저장하지 못했어요: ${saveError.message}`);
+    else { setDbMessage("일정을 저장했어요."); await refreshTrips(); }
+    setDbBusy(false);
+  }
+
+  function loadTrip(trip: SavedTrip) {
+    setCity(trip.city); setDays(trip.days); setTaste(trip.taste ?? ""); setPlan(trip.plan);
+    setActiveDay(trip.plan.days?.[0]?.day ?? 1); setError("");
+  }
+
+  async function deleteTrip(id: string) {
+    if (!supabase) return;
+    setDbBusy(true);
+    const { error: deleteError } = await supabase.from("trips").delete().eq("id", id);
+    if (deleteError) setDbMessage(`삭제하지 못했어요: ${deleteError.message}`);
+    else { setDbMessage("일정을 삭제했어요."); await refreshTrips(); }
+    setDbBusy(false);
+  }
 
   async function generate() {
     if (!city.trim()) { setError("여행할 도시를 입력해 주세요."); return; }
@@ -69,11 +108,16 @@ export default function Planner() {
             </div>
 
             {plan ? <section className="itinerary">
-              <div className="section-heading"><div><div className="eyebrow">YOUR ITINERARY</div><h2>{plan.title}</h2></div><span className="day-count">{plan.days.length}일</span></div>
+              <div className="section-heading"><div><div className="eyebrow">YOUR ITINERARY</div><h2>{plan.title}</h2></div><button className="save-trip-button" onClick={saveTrip} disabled={!supabase || dbBusy}>{dbBusy ? "저장 중…" : "♡ 일정 저장"}</button></div>
               <div className="day-tabs">{plan.days.map((d) => <button key={d.day} onClick={() => setActiveDay(d.day)} className={activeDay === d.day ? "day-tab active" : "day-tab"}>Day {String(d.day).padStart(2,"0")}</button>)}</div>
               <ol className="place-list">{current?.places.map((p, i) => <li key={`${p.name}-${i}`} className="place-item"><span className="place-number">{String(i + 1).padStart(2,"0")}</span><div className="place-copy"><strong>{p.name}</strong><p>{p.description}</p></div><span className="place-chevron">›</span></li>)}</ol>
               <p className="route-note">지도에서 번호 순서대로 코스를 확인하세요</p>
             </section> : <div className="sidebar-tip"><span className="tip-icon">✦</span><p><strong>작은 팁</strong><br />여행지와 취향을 구체적으로 적을수록 더 알찬 코스를 추천해요.</p></div>}
+            <section className="saved-trips">
+              <div className="saved-heading"><h2>저장한 일정</h2><button onClick={() => void refreshTrips()} disabled={!supabase || dbBusy} aria-label="일정 목록 새로고침">↻</button></div>
+              {dbMessage && <p className="db-message">{dbMessage}</p>}
+              {savedTrips.length === 0 ? <p className="saved-empty">저장된 일정이 아직 없어요.</p> : <ul className="saved-list">{savedTrips.map((trip) => <li key={trip.id}><button className="saved-load" onClick={() => loadTrip(trip)}><strong>{trip.title}</strong><span>{trip.city} · {trip.days}일</span></button><button className="saved-delete" onClick={() => void deleteTrip(trip.id)} disabled={dbBusy} aria-label={`${trip.title} 삭제`}>삭제</button></li>)}</ul>}
+            </section>
           </div>
           <footer className="sidebar-footer"><span>✦</span> Make your journey yours</footer>
         </aside>
