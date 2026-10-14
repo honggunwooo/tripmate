@@ -30,6 +30,8 @@ export default function Planner() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [authError, setAuthError] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const supabase = getSupabase();
 
@@ -53,14 +55,14 @@ export default function Planner() {
 
   async function submitAuth(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!supabase) { setDbMessage("Supabase 환경변수를 먼저 설정해 주세요."); return; }
-    setAuthBusy(true); setDbMessage("");
+    if (!supabase) { setAuthError(true); setAuthMessage("Supabase 연결 설정이 없어 회원가입을 진행할 수 없어요."); return; }
+    setAuthBusy(true); setAuthMessage(""); setAuthError(false);
     const result = authMode === "login"
       ? await supabase.auth.signInWithPassword({ email, password })
       : await supabase.auth.signUp({ email, password });
-    if (result.error) setDbMessage(`인증에 실패했어요: ${result.error.message}`);
-    else if (authMode === "signup" && !result.data.session) setDbMessage("가입 확인 이메일을 확인한 뒤 로그인해 주세요.");
-    else { setDbMessage(authMode === "signup" ? "회원가입이 완료됐어요." : "로그인했어요."); setPassword(""); }
+    if (result.error) { setAuthError(true); setAuthMessage(`인증에 실패했어요: ${result.error.message}`); }
+    else if (authMode === "signup" && !result.data.session) { setAuthMessage("회원가입이 접수됐어요! 가입 확인 이메일을 확인한 뒤 로그인해 주세요."); setPassword(""); }
+    else { setAuthMessage(authMode === "signup" ? "회원가입이 완료됐어요! 이제 여행 일정을 저장할 수 있어요." : "로그인됐어요!"); setPassword(""); }
     setAuthBusy(false);
   }
 
@@ -68,7 +70,8 @@ export default function Planner() {
     if (!supabase) return;
     setAuthBusy(true);
     const { error: logoutError } = await supabase.auth.signOut();
-    setDbMessage(logoutError ? `로그아웃하지 못했어요: ${logoutError.message}` : "로그아웃했어요.");
+    setAuthError(Boolean(logoutError));
+    setAuthMessage(logoutError ? `로그아웃하지 못했어요: ${logoutError.message}` : "로그아웃했어요.");
     setAuthBusy(false);
   }
 
@@ -135,8 +138,10 @@ export default function Planner() {
                   <input type="password" autoComplete={authMode === "login" ? "current-password" : "new-password"} placeholder="비밀번호 (6자 이상)" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} required />
                   <button className="auth-submit" type="submit" disabled={!supabase || authBusy}>{authBusy ? "처리 중…" : authMode === "login" ? "로그인" : "회원가입"}</button>
                 </form>
-                <button className="auth-mode-toggle" onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setDbMessage(""); }}>{authMode === "login" ? "처음이신가요? 회원가입" : "이미 계정이 있나요? 로그인"}</button>
+                <button className="auth-mode-toggle" onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthMessage(""); setAuthError(false); }}>{authMode === "login" ? "처음이신가요? 회원가입" : "이미 계정이 있나요? 로그인"}</button>
               </>}
+              {authMessage && <p className={authError ? "auth-feedback error" : "auth-feedback"} role={authError ? "alert" : "status"}>{authMessage}</p>}
+              {!supabase && <p className="auth-config-note">Supabase 연결 설정을 확인해 주세요.</p>}
             </section>
 
             <section className="saved-trips">
