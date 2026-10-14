@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 
 const TripMap = dynamic(() => import("./TripMap"), {
@@ -25,22 +26,56 @@ export default function Planner() {
   const [savedTrips, setSavedTrips] = useState<SavedTrip[]>([]);
   const [dbMessage, setDbMessage] = useState("");
   const [dbBusy, setDbBusy] = useState(false);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
   const supabase = getSupabase();
 
-  async function refreshTrips() {
+  const refreshTrips = useCallback(async () => {
     if (!supabase) { setDbMessage("Supabase 환경변수를 설정하면 저장한 일정을 볼 수 있어요."); return; }
+    if (!authUser) { setSavedTrips([]); return; }
     const { data, error: queryError } = await supabase.from("trips").select("id,title,city,days,taste,plan,created_at").order("created_at", { ascending: false });
     if (queryError) { setDbMessage(`일정 목록을 불러오지 못했어요: ${queryError.message}`); return; }
     setSavedTrips((data ?? []) as SavedTrip[]);
     setDbMessage("");
+  }, [supabase, authUser]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase.auth.getSession().then(({ data }) => setAuthUser(data.session?.user ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setAuthUser(session?.user ?? null));
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  useEffect(() => { void refreshTrips(); }, [refreshTrips]);
+
+  async function submitAuth(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase) { setDbMessage("Supabase 환경변수를 먼저 설정해 주세요."); return; }
+    setAuthBusy(true); setDbMessage("");
+    const result = authMode === "login"
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password });
+    if (result.error) setDbMessage(`인증에 실패했어요: ${result.error.message}`);
+    else if (authMode === "signup" && !result.data.session) setDbMessage("가입 확인 이메일을 확인한 뒤 로그인해 주세요.");
+    else { setDbMessage(authMode === "signup" ? "회원가입이 완료됐어요." : "로그인했어요."); setPassword(""); }
+    setAuthBusy(false);
   }
 
-  useEffect(() => { void refreshTrips(); }, []);
+  async function logout() {
+    if (!supabase) return;
+    setAuthBusy(true);
+    const { error: logoutError } = await supabase.auth.signOut();
+    setDbMessage(logoutError ? `로그아웃하지 못했어요: ${logoutError.message}` : "로그아웃했어요.");
+    setAuthBusy(false);
+  }
 
   async function saveTrip() {
-    if (!plan || !supabase) return;
+    if (!plan || !supabase || !authUser) return;
     setDbBusy(true); setDbMessage("");
-    const { error: saveError } = await supabase.from("trips").insert({ title: plan.title, city, days, taste, plan });
+    const { error: saveError } = await supabase.from("trips").insert({ user_id: authUser.id, title: plan.title, city, days, taste, plan });
     if (saveError) setDbMessage(`저장하지 못했어요: ${saveError.message}`);
     else { setDbMessage("일정을 저장했어요."); await refreshTrips(); }
     setDbBusy(false);
@@ -92,6 +127,18 @@ export default function Planner() {
             <h1>어디로<br />떠나볼까요?</h1>
             <p className="intro">취향을 알려주시면 AI가 딱 맞는<br />여행 코스를 만들어 드려요.</p>
 
+            <section className="auth-panel">
+              {authUser ? <div className="signed-in"><div><span className="eyebrow">SIGNED IN</span><strong>{authUser.email}</strong></div><button onClick={logout} disabled={authBusy}>로그아웃</button></div> : <>
+                <div className="auth-heading"><div><span className="eyebrow">YOUR TRIPMATE ACCOUNT</span><strong>{authMode === "login" ? "로그인하고 일정을 저장하세요" : "계정을 만들어 시작하세요"}</strong></div><span className="auth-lock">⌑</span></div>
+                <form className="auth-form" onSubmit={submitAuth}>
+                  <input type="email" autoComplete="email" placeholder="이메일 주소" value={email} onChange={(event) => setEmail(event.target.value)} required />
+                  <input type="password" autoComplete={authMode === "login" ? "current-password" : "new-password"} placeholder="비밀번호 (6자 이상)" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} required />
+                  <button className="auth-submit" type="submit" disabled={!supabase || authBusy}>{authBusy ? "처리 중…" : authMode === "login" ? "로그인" : "회원가입"}</button>
+                </form>
+                <button className="auth-mode-toggle" onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setDbMessage(""); }}>{authMode === "login" ? "처음이신가요? 회원가입" : "이미 계정이 있나요? 로그인"}</button>
+              </>}
+            </section>
+
             <div className="form-card">
               <label className="field-label" htmlFor="city">여행지</label>
               <div className="input-wrap"><span className="field-icon">⌖</span><input id="city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="도시를 입력해 주세요" onKeyDown={(e) => e.key === "Enter" && generate()} /></div>
@@ -108,7 +155,7 @@ export default function Planner() {
             </div>
 
             {plan ? <section className="itinerary">
-              <div className="section-heading"><div><div className="eyebrow">YOUR ITINERARY</div><h2>{plan.title}</h2></div><button className="save-trip-button" onClick={saveTrip} disabled={!supabase || dbBusy}>{dbBusy ? "저장 중…" : "♡ 일정 저장"}</button></div>
+              <div className="section-heading"><div><div className="eyebrow">YOUR ITINERARY</div><h2>{plan.title}</h2></div><button className="save-trip-button" onClick={saveTrip} disabled={!supabase || !authUser || dbBusy}>{dbBusy ? "저장 중…" : authUser ? "♡ 일정 저장" : "로그인 후 저장"}</button></div>
               <div className="day-tabs">{plan.days.map((d) => <button key={d.day} onClick={() => setActiveDay(d.day)} className={activeDay === d.day ? "day-tab active" : "day-tab"}>Day {String(d.day).padStart(2,"0")}</button>)}</div>
               <ol className="place-list">{current?.places.map((p, i) => <li key={`${p.name}-${i}`} className="place-item"><span className="place-number">{String(i + 1).padStart(2,"0")}</span><div className="place-copy"><strong>{p.name}</strong><p>{p.description}</p></div><span className="place-chevron">›</span></li>)}</ol>
               <p className="route-note">지도에서 번호 순서대로 코스를 확인하세요</p>
