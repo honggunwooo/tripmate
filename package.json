@@ -8,8 +8,6 @@
     "start": "next start"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1",
-    "bcryptjs": "^3.0.3",
     "leaflet": "^1.9.4",
     "next": "^15",
     "react": "^19",
