@@ -97,8 +97,6 @@ export default function Planner() {
     <main className="app-shell">
       <header className="topbar">
         <a className="brand" href="#" aria-label="TripMate 홈"><span className="brand-mark">T</span><span>tripmate</span></a>
-        <div className="topbar-center"><span className="status-dot" /> 나만의 여행 플래너</div>
-        <div className="topbar-right"><span className="topbar-label">여행을 가볍게</span><span className="avatar">여</span></div>
       </header>
 
       <div className="workspace">
@@ -114,8 +112,8 @@ export default function Planner() {
                 <span className="saved-count">{savedTrips.length}</span>
                 <button onClick={refreshTrips} aria-label="일정 목록 새로고침">↻</button>
               </div>
-              <p className="shared-note">DB와 로그인 없이, 이 브라우저에만 저장합니다. 다른 기기에서는 보이지 않아요.</p>
-              {storageMessage && <p className="db-message" role="status">{storageMessage}</p>}
+              <p className="storage-note">DB와 로그인 없이, 이 브라우저에만 저장합니다. 다른 기기에서는 보이지 않아요.</p>
+              {storageMessage && <p className="storage-message" role="status">{storageMessage}</p>}
               {savedTrips.length === 0 ? <p className="saved-empty">저장된 여행이 아직 없어요.<br />마음에 드는 일정을 만들어 저장해 보세요.</p> :
                 <ul className="saved-list">{savedTrips.map((trip) => <li key={trip.id}>
                   <button className="saved-load" onClick={() => loadTrip(trip)}><strong>{trip.title}</strong><span>{trip.city} · {trip.days}일 · {new Date(trip.created_at).toLocaleDateString("ko-KR")}</span></button>
