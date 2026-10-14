@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
 const TripMap = dynamic(() => import("./TripMap"), {
   ssr: false,
@@ -11,8 +11,6 @@ const TripMap = dynamic(() => import("./TripMap"), {
 type Place = { name: string; description: string; lat: number; lng: number };
 type DayPlan = { day: number; places: Place[] };
 type Plan = { title: string; days: DayPlan[] };
-type SavedTrip = { id: string; title: string; city: string; days: number; taste: string; plan: Plan; created_at: string };
-const STORAGE_KEY = "tripmate_saved_trips";
 
 export default function Planner() {
   const [city, setCity] = useState("");
@@ -22,53 +20,6 @@ export default function Planner() {
   const [activeDay, setActiveDay] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [savedTrips, setSavedTrips] = useState<SavedTrip[]>([]);
-  const [storageMessage, setStorageMessage] = useState("");
-
-  const refreshTrips = useCallback(() => {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-      setSavedTrips(Array.isArray(parsed) ? parsed : []);
-      setStorageMessage("이 브라우저에 저장된 여행 기록이에요.");
-    } catch {
-      setSavedTrips([]);
-      setStorageMessage("저장된 여행 기록을 읽지 못했어요.");
-    }
-  }, []);
-
-  useEffect(() => { refreshTrips(); }, [refreshTrips]);
-
-  function saveTrip() {
-    if (!plan) return;
-    try {
-      const next = [{ id: crypto.randomUUID(), title: plan.title, city, days, taste, plan, created_at: new Date().toISOString() }, ...savedTrips];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      setSavedTrips(next);
-      setStorageMessage("여행 일정을 이 브라우저에 저장했어요.");
-    } catch {
-      setStorageMessage("브라우저 저장 공간에 기록하지 못했어요.");
-    }
-  }
-
-  function loadTrip(trip: SavedTrip) {
-    setCity(trip.city);
-    setDays(trip.days);
-    setTaste(trip.taste ?? "");
-    setPlan(trip.plan);
-    setActiveDay(trip.plan.days?.[0]?.day ?? 1);
-    setError("");
-  }
-
-  function deleteTrip(id: string) {
-    try {
-      const next = savedTrips.filter((trip) => trip.id !== id);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      setSavedTrips(next);
-      setStorageMessage("일정을 삭제했어요.");
-    } catch {
-      setStorageMessage("일정을 삭제하지 못했어요.");
-    }
-  }
 
   async function generate() {
     if (!city.trim()) { setError("여행지를 입력해 주세요."); return; }
@@ -106,21 +57,6 @@ export default function Planner() {
             <h1>어디로<br />떠나볼까요?</h1>
             <p className="intro">취향을 알려주시면 AI가 딱 맞는<br />여행 코스를 만들어 드려요.</p>
 
-            <section className="saved-trips">
-              <div className="saved-heading">
-                <div><span className="eyebrow">TRIP LIBRARY</span><h2>여행 기록</h2></div>
-                <span className="saved-count">{savedTrips.length}</span>
-                <button onClick={refreshTrips} aria-label="일정 목록 새로고침">↻</button>
-              </div>
-              <p className="storage-note">DB와 로그인 없이, 이 브라우저에만 저장합니다. 다른 기기에서는 보이지 않아요.</p>
-              {storageMessage && <p className="storage-message" role="status">{storageMessage}</p>}
-              {savedTrips.length === 0 ? <p className="saved-empty">저장된 여행이 아직 없어요.<br />마음에 드는 일정을 만들어 저장해 보세요.</p> :
-                <ul className="saved-list">{savedTrips.map((trip) => <li key={trip.id}>
-                  <button className="saved-load" onClick={() => loadTrip(trip)}><strong>{trip.title}</strong><span>{trip.city} · {trip.days}일 · {new Date(trip.created_at).toLocaleDateString("ko-KR")}</span></button>
-                  <button className="saved-delete" onClick={() => deleteTrip(trip.id)} aria-label={`${trip.title} 삭제`}>삭제</button>
-                </li>)}</ul>}
-            </section>
-
             <div className="form-card">
               <label className="field-label" htmlFor="city">여행지</label>
               <div className="input-wrap"><span className="field-icon">⌖</span><input id="city" value={city} onChange={(event) => setCity(event.target.value)} placeholder="도시를 입력해 주세요" onKeyDown={(event) => event.key === "Enter" && void generate()} /></div>
@@ -134,7 +70,7 @@ export default function Planner() {
             </div>
 
             {plan ? <section className="itinerary">
-              <div className="section-heading"><div><div className="eyebrow">YOUR ITINERARY</div><h2>{plan.title}</h2></div><button className="save-trip-button" onClick={saveTrip}>일정 저장</button></div>
+              <div className="section-heading"><div><div className="eyebrow">YOUR ITINERARY</div><h2>{plan.title}</h2></div></div>
               <div className="day-tabs">{plan.days.map((day) => <button key={day.day} onClick={() => setActiveDay(day.day)} className={activeDay === day.day ? "day-tab active" : "day-tab"}>Day {String(day.day).padStart(2, "0")}</button>)}</div>
               <ol className="place-list">{current?.places.map((place, index) => <li key={`${place.name}-${index}`} className="place-item"><span className="place-number">{String(index + 1).padStart(2, "0")}</span><div className="place-copy"><strong>{place.name}</strong><p>{place.description}</p></div><span className="place-chevron">›</span></li>)}</ol>
               <p className="route-note">지도에서 번호 순서대로 여행 코스를 확인하세요.</p>
