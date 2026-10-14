@@ -139,6 +139,12 @@ export default function Planner() {
               </>}
             </section>
 
+            <section className="saved-trips">
+              <div className="saved-heading"><div><span className="eyebrow">YOUR LIBRARY</span><h2>내 여행 기록</h2></div><span className="saved-count">{savedTrips.length}</span><button onClick={() => void refreshTrips()} disabled={!supabase || !authUser || dbBusy} aria-label="일정 목록 새로고침">↻</button></div>
+              {dbMessage && <p className="db-message">{dbMessage}</p>}
+              {!supabase ? <p className="saved-empty">Supabase 환경변수를 설정하면 저장한 여행이 여기에 표시돼요.</p> : !authUser ? <p className="saved-empty">로그인하면 저장한 일정이 여기에 모여요.</p> : savedTrips.length === 0 ? <p className="saved-empty">아직 저장한 여행이 없어요.<br />마음에 드는 일정을 만들어 보세요.</p> : <ul className="saved-list">{savedTrips.map((trip) => <li key={trip.id}><button className="saved-load" onClick={() => loadTrip(trip)}><strong>{trip.title}</strong><span>{trip.city} · {trip.days}일 · {new Date(trip.created_at).toLocaleDateString("ko-KR")}</span></button><button className="saved-delete" onClick={() => void deleteTrip(trip.id)} disabled={dbBusy} aria-label={`${trip.title} 삭제`}>삭제</button></li>)}</ul>}
+            </section>
+
             <div className="form-card">
               <label className="field-label" htmlFor="city">여행지</label>
               <div className="input-wrap"><span className="field-icon">⌖</span><input id="city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="도시를 입력해 주세요" onKeyDown={(e) => e.key === "Enter" && generate()} /></div>
@@ -160,20 +166,13 @@ export default function Planner() {
               <ol className="place-list">{current?.places.map((p, i) => <li key={`${p.name}-${i}`} className="place-item"><span className="place-number">{String(i + 1).padStart(2,"0")}</span><div className="place-copy"><strong>{p.name}</strong><p>{p.description}</p></div><span className="place-chevron">›</span></li>)}</ol>
               <p className="route-note">지도에서 번호 순서대로 코스를 확인하세요</p>
             </section> : <div className="sidebar-tip"><span className="tip-icon">✦</span><p><strong>작은 팁</strong><br />여행지와 취향을 구체적으로 적을수록 더 알찬 코스를 추천해요.</p></div>}
-            <section className="saved-trips">
-              <div className="saved-heading"><h2>저장한 일정</h2><button onClick={() => void refreshTrips()} disabled={!supabase || dbBusy} aria-label="일정 목록 새로고침">↻</button></div>
-              {dbMessage && <p className="db-message">{dbMessage}</p>}
-              {savedTrips.length === 0 ? <p className="saved-empty">저장된 일정이 아직 없어요.</p> : <ul className="saved-list">{savedTrips.map((trip) => <li key={trip.id}><button className="saved-load" onClick={() => loadTrip(trip)}><strong>{trip.title}</strong><span>{trip.city} · {trip.days}일</span></button><button className="saved-delete" onClick={() => void deleteTrip(trip.id)} disabled={dbBusy} aria-label={`${trip.title} 삭제`}>삭제</button></li>)}</ul>}
-            </section>
           </div>
           <footer className="sidebar-footer"><span>✦</span> Make your journey yours</footer>
         </aside>
 
         <section className="map-panel" aria-label="여행 경로 지도">
           <div className="map-topline"><div className="map-caption"><span className="map-pin">⌖</span><span>{city || "여행지를 입력해 주세요"}</span></div><div className="map-legend"><span className="legend-line" /> 추천 이동 경로</div></div>
-          <div className="map-frame"><TripMap places={current?.places ?? []} />
-            {!plan && <div className="map-empty"><div className="empty-orbit"><span>✦</span></div><h2>여행의 시작을 그려보세요</h2><p>여행지를 입력하면 추천 코스가<br />지도 위에 펼쳐집니다.</p></div>}
-          </div>
+          <div className="map-frame"><TripMap places={current?.places ?? []} /></div>
           <div className="map-footer"><span>© OpenStreetMap contributors</span><span className="map-footer-right">TRIPMATE <i>·</i> YOUR TRAVEL COMPANION</span></div>
         </section>
       </div>
